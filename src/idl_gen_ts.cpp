@@ -2139,7 +2139,7 @@ class TsGenerator : public BaseGenerator {
               }
             }
             code += sig_begin + type + sig_end + " {\n";
-            code += "  if (!data.length) return 0;";
+            code += "  if (!data.length) return 0;\n";
             code += "  builder.startVector(" + NumToString(elem_size);
             code += ", data.length, " + NumToString(alignment) + ");\n";
             code += "  for (let i = data.length - 1; i >= 0; i--) {\n";
