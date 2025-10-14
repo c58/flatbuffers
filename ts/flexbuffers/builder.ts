@@ -524,7 +524,7 @@ export class Builder {
         this.stack.push(this.floatStackValue(value));
       }
     } else if (ArrayBuffer.isView(value)) {
-      this.writeBlob(value.buffer);
+      this.writeBlob(value.buffer as ArrayBuffer);
     } else if (typeof value === 'string' || value instanceof String) {
       this.writeString(value as string);
     } else if (Array.isArray(value)) {

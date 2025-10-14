@@ -5,7 +5,9 @@ import {
   SIZEOF_INT,
   SIZEOF_SHORT,
 } from './constants.js';
-import {IGeneratedObject, Offset} from './types.js';
+import {BuilderCacheResult, IGeneratedObject, Offset} from './types.js';
+
+const DUMMY_CACHE_RESULT: BuilderCacheResult = [0, (x: number) => x];
 
 export class Builder {
   private bb: ByteBuffer;
@@ -63,6 +65,10 @@ export class Builder {
     this.vector_num_elems = 0;
     this.force_defaults = false;
     this.string_maps = null;
+  }
+
+  cache(data: unknown): BuilderCacheResult {
+    return DUMMY_CACHE_RESULT;
   }
 
   /**

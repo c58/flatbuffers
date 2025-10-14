@@ -15,3 +15,7 @@ export interface IGeneratedObject {
 export interface IUnpackableObject<T> {
   unpack(): T;
 }
+
+export type BuilderCacheFunction = (offset: number) => number;
+
+export type BuilderCacheResult = [number, BuilderCacheFunction]

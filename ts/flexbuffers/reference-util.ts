@@ -165,6 +165,6 @@ export function keyForIndex(
     length++;
   }
   return fromUTF8Array(
-    new Uint8Array(dataView.buffer, keyIndirectOffset, length),
+    new Uint8Array(dataView.buffer as ArrayBuffer, keyIndirectOffset, length),
   );
 }

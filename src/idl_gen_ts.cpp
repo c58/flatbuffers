@@ -1242,13 +1242,17 @@ class TsGenerator : public BaseGenerator {
     std::string pack_func_prototype =
         "\npack(builder:flatbuffers.Builder): flatbuffers.Offset {\n";
 
+    std::string pack_func_cache_call =
+        "  const [$cached, $setCache] = builder.cache(this);\n  if ($cached) "
+        "return $cached;\n";
+
     std::string pack_func_offset_decl;
     std::string pack_func_create_call;
 
     const auto struct_name = AddImport(imports, struct_def, struct_def).name;
 
     if (has_create) {
-      pack_func_create_call = "  return " + struct_name + ".create" +
+      pack_func_create_call = "  return $setCache(" + struct_name + ".create" +
                               GetPrefixedName(struct_def) + "(builder" +
                               (struct_def.fields.vec.empty() ? "" : ",\n    ");
     } else {
@@ -1583,18 +1587,18 @@ class TsGenerator : public BaseGenerator {
     constructor_func += "){}\n\n";
 
     if (has_create) {
-      pack_func_create_call += ");";
+      pack_func_create_call += "));";
     } else {
-      pack_func_create_call += "return " + struct_name + ".end" +
-                               GetPrefixedName(struct_def) + "(builder);";
+      pack_func_create_call += "return $setCache(" + struct_name + ".end" +
+                               GetPrefixedName(struct_def) + "(builder));";
     }
     obj_api_class = "\n";
     obj_api_class += "export class ";
     obj_api_class += GetTypeName(struct_def, /*object_api=*/true);
     obj_api_class += " implements flatbuffers.IGeneratedObject {\n";
     obj_api_class += constructor_func;
-    obj_api_class += pack_func_prototype + pack_func_offset_decl +
-                     pack_func_create_call + "\n}";
+    obj_api_class += pack_func_prototype + pack_func_cache_call +
+                     pack_func_offset_decl + pack_func_create_call + "\n}";
 
     obj_api_class += "\n}\n";
 
@@ -2140,6 +2144,9 @@ class TsGenerator : public BaseGenerator {
             }
             code += sig_begin + type + sig_end + " {\n";
             code += "  if (!data.length) return 0;\n";
+            code +=
+                "  const [$cached, $setCache] = builder.cache(data);\n  if "
+                "($cached) return $cached;\n";
             code += "  builder.startVector(" + NumToString(elem_size);
             code += ", data.length, " + NumToString(alignment) + ");\n";
             code += "  for (let i = data.length - 1; i >= 0; i--) {\n";
@@ -2149,7 +2156,7 @@ class TsGenerator : public BaseGenerator {
             }
             code += "data[i]!);\n";
             code += "  }\n";
-            code += "  return builder.endVector();\n";
+            code += "  return $setCache(builder.endVector());\n";
             code += "}\n\n";
           }
 

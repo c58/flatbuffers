@@ -164,7 +164,7 @@ export class Reference {
     ) {
       const begin = indirect(this.dataView, this.offset, this.parentWidth);
       return fromUTF8Array(
-        new Uint8Array(this.dataView.buffer, begin, this.length()),
+        new Uint8Array(this.dataView.buffer as ArrayBuffer, begin, this.length()),
       );
     }
     return null;
