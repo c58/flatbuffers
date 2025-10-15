@@ -776,6 +776,17 @@ class TsGenerator : public BaseGenerator {
     }
   }
 
+  // Helper function to replace "this." with "this._a." in a string
+  static std::string GenerateFieldAccessorForGetter(const std::string& input) {
+    std::string result = input;
+    size_t pos = 0;
+    while ((pos = result.find("this", pos)) != std::string::npos) {
+      result.replace(pos, 4, "this._a");
+      pos += 7;  // Move past the replacement
+    }
+    return result;
+  }
+
   std::string GenerateNewExpression(const std::string& object_name) {
     return "new " + namer_.Type(object_name) + "()";
   }
@@ -1226,14 +1237,19 @@ class TsGenerator : public BaseGenerator {
                  std::string& obj_api_unpack_func, std::string& obj_api_class,
                  import_set& imports) {
     const auto class_name = GetTypeName(struct_def, /*object_api=*/true);
+    const auto object_name = GetTypeName(struct_def);
 
     std::string unpack_func = "\nunpack(): " + class_name +
-                              " {\n  return new " + class_name + "(" +
-                              (struct_def.fields.vec.empty() ? "" : "\n");
+                              " {\n  return new " + class_name + "(this);\n}";
     std::string unpack_to_func = "\nunpackTo(_o: " + class_name + "): void {" +
                                  +(struct_def.fields.vec.empty() ? "" : "\n");
 
-    std::string constructor_func = "constructor(";
+    std::string field_getters_functions = "";
+    std::string field_setter_functions = "";
+    std::string field_cache_fields = "";
+
+    std::string constructor_func =
+        "constructor(private readonly _a: " + object_name + ") {}\n";
     constructor_func += (struct_def.fields.vec.empty() ? "" : "\n");
 
     const auto has_create =
@@ -1537,13 +1553,18 @@ class TsGenerator : public BaseGenerator {
         field_offset_val = field_field;
       }
 
-      unpack_func += "    " + field_val;
       unpack_to_func += "  _o." + field_field + " = " + field_val + ";";
 
-      // FIXME: if field_type and field_field are identical, then
-      // this generates invalid typescript.
-      constructor_func += "  public " + field_field + ": " + field_type +
-                          " = " + field_default_val;
+      field_cache_fields +=
+          "private _" + field_field + ": " + field_type + "|undefined;\n";
+
+      field_setter_functions += "set " + field_field + "(v: " + field_type +
+                                ") {\n  this._" + field_field + " = v;\n}\n";
+      field_getters_functions +=
+          "get " + field_field + "(): " + field_type + " {\n  if (this._" +
+          field_field + " !== undefined) return this._" + field_field +
+          ";\n  return this._" + field_field + " = " +
+          GenerateFieldAccessorForGetter(field_val) + ";\n}\n";
 
       if (!struct_def.fixed) {
         if (!field_offset_decl.empty()) {
@@ -1564,27 +1585,20 @@ class TsGenerator : public BaseGenerator {
       }
 
       if (std::next(it) != struct_def.fields.vec.end()) {
-        constructor_func += ",\n";
-
         if (!struct_def.fixed && has_create) {
           pack_func_create_call += ",\n    ";
         }
 
-        unpack_func += ",\n";
         unpack_to_func += "\n";
       } else {
-        constructor_func += "\n";
         if (!struct_def.fixed) {
           pack_func_offset_decl += (pack_func_offset_decl.empty() ? "" : "\n");
           pack_func_create_call += "\n  ";
         }
 
-        unpack_func += "\n  ";
         unpack_to_func += "\n";
       }
     }
-
-    constructor_func += "){}\n\n";
 
     if (has_create) {
       pack_func_create_call += "));";
@@ -1596,13 +1610,15 @@ class TsGenerator : public BaseGenerator {
     obj_api_class += "export class ";
     obj_api_class += GetTypeName(struct_def, /*object_api=*/true);
     obj_api_class += " implements flatbuffers.IGeneratedObject {\n";
+    obj_api_class += field_cache_fields;
     obj_api_class += constructor_func;
+    obj_api_class += field_getters_functions;
+    obj_api_class += field_setter_functions;
     obj_api_class += pack_func_prototype + pack_func_cache_call +
                      pack_func_offset_decl + pack_func_create_call + "\n}";
 
     obj_api_class += "\n}\n";
 
-    unpack_func += ");\n}";
     unpack_to_func += "}\n";
 
     obj_api_unpack_func = unpack_func + "\n\n" + unpack_to_func;
@@ -2144,9 +2160,6 @@ class TsGenerator : public BaseGenerator {
             }
             code += sig_begin + type + sig_end + " {\n";
             code += "  if (!data.length) return 0;\n";
-            code +=
-                "  const [$cached, $setCache] = builder.cache(data);\n  if "
-                "($cached) return $cached;\n";
             code += "  builder.startVector(" + NumToString(elem_size);
             code += ", data.length, " + NumToString(alignment) + ");\n";
             code += "  for (let i = data.length - 1; i >= 0; i--) {\n";
@@ -2156,7 +2169,7 @@ class TsGenerator : public BaseGenerator {
             }
             code += "data[i]!);\n";
             code += "  }\n";
-            code += "  return $setCache(builder.endVector());\n";
+            code += "  return builder.endVector();\n";
             code += "}\n\n";
           }
 
