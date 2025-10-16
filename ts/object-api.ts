@@ -10,8 +10,7 @@ export const createObjectProxy = <T extends object>(
   const proxy = new Proxy<T>(cache as any, {
     get(target, prop) {
       if (prop in cache) return cache[prop];
-      const value = resolveField(prop);
-      return cache[prop] = value;
+      return cache[prop] = resolveField(prop);
     }
   })
 
