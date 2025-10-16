@@ -293,7 +293,7 @@ class TsGenerator : public BaseGenerator {
         auto is_struct = parser_.structs_.Lookup(fully_qualified_type_name);
         code += "export { " + type_name;
         if (parser_.opts.generate_object_based_api && is_struct) {
-          code += ", " + type_name + parser_.opts.object_suffix;
+          code += ", type " + type_name + parser_.opts.object_suffix;
         }
         code += " } from '";
         std::string import_extension =
@@ -1240,23 +1240,26 @@ class TsGenerator : public BaseGenerator {
     const auto object_name = GetTypeName(struct_def);
 
     std::string unpack_func = "\nunpack(): " + class_name +
-                              " {\n  return new " + class_name + "(this);\n}";
+                              " {\n  return flatbuffers.createObjectProxy(\n   "
+                              " this.unpackFieldValue.bind(this),\n    "
+                              "pack" +
+                              object_name + ",\n  ) \n}";
     std::string unpack_to_func = "\nunpackTo(_o: " + class_name + "): void {" +
                                  +(struct_def.fields.vec.empty() ? "" : "\n");
 
-    std::string field_getters_functions = "";
-    std::string field_setter_functions = "";
-    std::string field_cache_fields = "";
+    std::string unpack_field_func =
+        "\nunpackFieldValue(prop: number | string | symbol): unknown {\n  "
+        "switch (prop) {\n  ";
 
-    std::string constructor_func =
-        "constructor(private readonly _a: " + object_name + ") {}\n";
-    constructor_func += (struct_def.fields.vec.empty() ? "" : "\n");
+    std::string object_field_definitions = "";
+    std::string object_field_func = "";
 
     const auto has_create =
         struct_def.fixed || CanCreateFactoryMethod(struct_def);
 
     std::string pack_func_prototype =
-        "\npack(builder:flatbuffers.Builder): flatbuffers.Offset {\n";
+        "\nfunction pack" + object_name + "(this: " + class_name +
+        ", builder:flatbuffers.Builder): flatbuffers.Offset {\n";
 
     std::string pack_func_cache_call =
         "  const [$cached, $setCache] = builder.cache(this);\n  if ($cached) "
@@ -1555,16 +1558,17 @@ class TsGenerator : public BaseGenerator {
 
       unpack_to_func += "  _o." + field_field + " = " + field_val + ";";
 
-      field_cache_fields +=
-          "private _" + field_field + ": " + field_type + "|undefined;\n";
+      object_field_definitions +=
+          "  " + field_field + ": " + field_type + ";\n";
 
-      field_setter_functions += "set " + field_field + "(v: " + field_type +
-                                ") {\n  this._" + field_field + " = v;\n}\n";
-      field_getters_functions +=
-          "get " + field_field + "(): " + field_type + " {\n  if (this._" +
-          field_field + " !== undefined) return this._" + field_field +
-          ";\n  return this._" + field_field + " = " +
-          GenerateFieldAccessorForGetter(field_val) + ";\n}\n";
+      object_field_func += "  field(prop: \"" + field_field + "\" | " +
+                           NumToString(it - struct_def.fields.vec.begin()) +
+                           "): " + field_type + ";\n";
+
+      unpack_field_func += "  case " +
+                           NumToString(it - struct_def.fields.vec.begin()) +
+                           ":\n    case \"" + field_field +
+                           "\":\n      return " + field_val + ";\n  ";
 
       if (!struct_def.fixed) {
         if (!field_offset_decl.empty()) {
@@ -1607,21 +1611,20 @@ class TsGenerator : public BaseGenerator {
                                GetPrefixedName(struct_def) + "(builder));";
     }
     obj_api_class = "\n";
-    obj_api_class += "export class ";
+    obj_api_class += "export interface ";
     obj_api_class += GetTypeName(struct_def, /*object_api=*/true);
-    obj_api_class += " implements flatbuffers.IGeneratedObject {\n";
-    obj_api_class += field_cache_fields;
-    obj_api_class += constructor_func;
-    obj_api_class += field_getters_functions;
-    obj_api_class += field_setter_functions;
+    obj_api_class += " extends flatbuffers.IGeneratedObject {\n";
+    obj_api_class += object_field_definitions + "\n";
+    obj_api_class += object_field_func;
+    obj_api_class += "}\n";
     obj_api_class += pack_func_prototype + pack_func_cache_call +
                      pack_func_offset_decl + pack_func_create_call + "\n}";
 
-    obj_api_class += "\n}\n";
-
+    unpack_field_func += "  default:\n      return undefined;\n  }\n}";
     unpack_to_func += "}\n";
 
-    obj_api_unpack_func = unpack_func + "\n\n" + unpack_to_func;
+    obj_api_unpack_func =
+        unpack_field_func + "\n" + unpack_func + "\n" + unpack_to_func;
   }
 
   static bool CanCreateFactoryMethod(const StructDef& struct_def) {
