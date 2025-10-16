@@ -1241,14 +1241,14 @@ class TsGenerator : public BaseGenerator {
 
     std::string unpack_func = "\nunpack(): " + class_name +
                               " {\n  return flatbuffers.createObjectProxy(\n   "
-                              " this.unpackFieldValue.bind(this),\n    "
+                              " this.unpackField.bind(this),\n    "
                               "pack" +
                               object_name + ",\n  ) \n}";
     std::string unpack_to_func = "\nunpackTo(_o: " + class_name + "): void {" +
                                  +(struct_def.fields.vec.empty() ? "" : "\n");
 
     std::string unpack_field_func =
-        "\nunpackFieldValue(prop: number | string | symbol): unknown {\n  "
+        "\nunpackField(prop: number): any {\n  "
         "switch (prop) {\n  ";
 
     std::string object_field_definitions = "";
@@ -1556,7 +1556,8 @@ class TsGenerator : public BaseGenerator {
         field_offset_val = field_field;
       }
 
-      unpack_to_func += "  _o." + field_field + " = " + field_val + ";";
+      unpack_to_func += "  _o." + field_field + " = this.unpackField(" +
+                        NumToString(it - struct_def.fields.vec.begin()) + ");";
 
       object_field_definitions +=
           "  " + field_field + ": " + field_type + ";\n";
@@ -1567,8 +1568,7 @@ class TsGenerator : public BaseGenerator {
 
       unpack_field_func += "  case " +
                            NumToString(it - struct_def.fields.vec.begin()) +
-                           ":\n    case \"" + field_field +
-                           "\":\n      return " + field_val + ";\n  ";
+                           ":\n      return " + field_val + ";\n  ";
 
       if (!struct_def.fixed) {
         if (!field_offset_decl.empty()) {
