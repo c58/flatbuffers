@@ -776,17 +776,6 @@ class TsGenerator : public BaseGenerator {
     }
   }
 
-  // Helper function to replace "this." with "this._a." in a string
-  static std::string GenerateFieldAccessorForGetter(const std::string& input) {
-    std::string result = input;
-    size_t pos = 0;
-    while ((pos = result.find("this", pos)) != std::string::npos) {
-      result.replace(pos, 4, "this._a");
-      pos += 7;  // Move past the replacement
-    }
-    return result;
-  }
-
   std::string GenerateNewExpression(const std::string& object_name) {
     return "new " + namer_.Type(object_name) + "()";
   }
@@ -1240,22 +1229,17 @@ class TsGenerator : public BaseGenerator {
     const auto object_name = GetTypeName(struct_def);
 
     std::string unpack_func = "\nunpack(): " + class_name +
-                              " {\n  return new " + class_name + "(this);\n}";
-    std::string unpack_to_func = "\nunpackTo(_o: " + class_name +
-                                 "): void {\n  _o._a = this;" +
+                              " {\n  return new " + class_name + "(" +
+                              (struct_def.fields.vec.empty() ? "" : "\n");
+    std::string unpack_to_func = "\nunpackTo(_o: " + class_name + "): void {" +
                                  +(struct_def.fields.vec.empty() ? "" : "\n");
 
-    std::string object_field_func = "";
+    std::string unpack_field_overrides = "";
     std::string unpack_field_func =
         "\nunpackField(prop: number): any {\n  "
         "switch (prop) {\n  ";
 
-    std::string field_getters_functions = "";
-    std::string field_setter_functions = "";
-    std::string field_cache_fields = "";
-
-    std::string constructor_func =
-        "  constructor(public _a: " + object_name + ") {}\n";
+    std::string constructor_func = "  constructor(";
     constructor_func += (struct_def.fields.vec.empty() ? "" : "\n");
 
     const auto has_create =
@@ -1296,6 +1280,8 @@ class TsGenerator : public BaseGenerator {
 
       const auto field_method = namer_.Method(field);
       const auto field_field = namer_.Field(field);
+      const auto field_index = NumToString(it - struct_def.fields.vec.begin());
+
       const std::string field_binded_method =
           "this." + field_method + ".bind(this)";
 
@@ -1559,27 +1545,18 @@ class TsGenerator : public BaseGenerator {
         field_offset_val = field_field;
       }
 
-      unpack_to_func += "  _o." + field_field + " = this.unpackField(" +
-                        NumToString(it - struct_def.fields.vec.begin()) + ");";
+      unpack_func += "    this.unpackField(" + field_index + ")";
+      unpack_to_func +=
+          "  _o." + field_field + " = this.unpackField(" + field_index + ");";
 
-      field_cache_fields += "  private declare _" + field_field + ": " +
-                            field_type + "|undefined;\n";
+      constructor_func += "    public " + field_field + ": " + field_type +
+                          " = " + field_default_val + "";
 
-      field_setter_functions += "  set " + field_field + "(v: " + field_type +
-                                ") { this._" + field_field + " = v; }\n";
-      field_getters_functions +=
-          "  get " + field_field + "(): " + field_type + " {\n    if (this._" +
-          field_field + " !== undefined) return this._" + field_field +
-          ";\n    return this._" + field_field + " = this._a.unpackField(" +
-          NumToString(it - struct_def.fields.vec.begin()) + ");\n  }\n";
+      unpack_field_overrides +=
+          "  unpackField(prop: " + field_index + "): " + field_type + ";\n";
 
-      object_field_func +=
-          "  field(prop: " + NumToString(it - struct_def.fields.vec.begin()) +
-          "): " + field_type + ";\n";
-
-      unpack_field_func += "  case " +
-                           NumToString(it - struct_def.fields.vec.begin()) +
-                           ":\n      return " + field_val + ";\n  ";
+      unpack_field_func +=
+          "  case " + field_index + ":\n      return " + field_val + ";\n  ";
 
       if (!struct_def.fixed) {
         if (!field_offset_decl.empty()) {
@@ -1604,45 +1581,44 @@ class TsGenerator : public BaseGenerator {
           pack_func_create_call += ",\n    ";
         }
 
+        constructor_func += ",\n";
         unpack_to_func += "\n";
+        unpack_func += ",\n";
       } else {
         if (!struct_def.fixed) {
           pack_func_offset_decl += (pack_func_offset_decl.empty() ? "" : "\n");
           pack_func_create_call += "\n  ";
         }
 
+        constructor_func += "\n  ";
         unpack_to_func += "\n";
-        object_field_func +=
-            "  field(prop: number): any { return this._a.unpackField(prop); "
-            "}\n";
+        unpack_func += "\n  ";
       }
     }
 
+    constructor_func += ") {}\n\n";
     if (has_create) {
-      pack_func_create_call += "));";
+      pack_func_create_call += "  ));";
     } else {
-      pack_func_create_call += "return $setCache(" + struct_name + ".end" +
+      pack_func_create_call += "  return $setCache(" + struct_name + ".end" +
                                GetPrefixedName(struct_def) + "(builder));";
     }
     obj_api_class = "\n";
     obj_api_class += "export class ";
     obj_api_class += GetTypeName(struct_def, /*object_api=*/true);
     obj_api_class += " implements flatbuffers.IGeneratedObject {\n";
-    obj_api_class += field_cache_fields;
     obj_api_class += constructor_func;
-    obj_api_class += field_getters_functions;
-    obj_api_class += field_setter_functions;
-    obj_api_class += object_field_func;
     obj_api_class += pack_func_prototype + pack_func_cache_call +
                      pack_func_offset_decl + pack_func_create_call + "\n}";
 
     obj_api_class += "\n}\n";
 
+    unpack_func += ");\n}";
     unpack_field_func += "  default:\n      return undefined;\n  }\n}";
     unpack_to_func += "}\n";
 
-    obj_api_unpack_func =
-        unpack_field_func + "\n" + unpack_func + "\n" + unpack_to_func;
+    obj_api_unpack_func = unpack_field_overrides + unpack_field_func + "\n" +
+                          unpack_func + "\n" + unpack_to_func;
   }
 
   static bool CanCreateFactoryMethod(const StructDef& struct_def) {
