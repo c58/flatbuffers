@@ -5,24 +5,18 @@ export const createObjectProxy = <T extends object>(
   resolveField: (prop: string | symbol) => unknown,
   pack: (builder: Builder) => Offset,
 ): T => {
-  const cache = new Map<string | symbol, unknown>();
+  const cache = {} as any;
 
-  const proxy = new Proxy<T>({} as any, {
+  const proxy = new Proxy<T>(cache as any, {
     get(target, prop) {
-      if (cache.has(prop)) {
-        return cache.get(prop);
-      }
+      if (prop in cache) return cache[prop];
       const value = resolveField(prop);
-      cache.set(prop, value);
-      return value;
-    },
-    set(target, prop, value) {
-      cache.set(prop, value);
-      return true;
+      return cache[prop] = value;
     }
   })
 
-  cache.set('pack', pack.bind(proxy));
-  cache.set('field', resolveField);
+  cache.pack = pack.bind(proxy);
+  cache.field = resolveField;
+
   return proxy;
 }
