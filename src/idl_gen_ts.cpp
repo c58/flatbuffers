@@ -480,7 +480,7 @@ class TsGenerator : public BaseGenerator {
     }
   }
 
-  std::string GenBBAccess() const { return "this.bb!"; }
+  std::string GenBBAccess() const { return "bb!"; }
 
   std::string GenDefaultValue(const FieldDef& field, import_set& imports) {
     if (field.IsScalarOptional()) {
@@ -1285,6 +1285,9 @@ class TsGenerator : public BaseGenerator {
       const std::string field_binded_method =
           "this." + field_method + ".bind(this)";
 
+      const std::string bb_table_getter =
+          "this.provideFieldTable(" + NumToString(field.value.offset) + ").bb";
+
       std::string field_val;
       std::string field_type;
       // a string that declares a variable containing the
@@ -1355,8 +1358,8 @@ class TsGenerator : public BaseGenerator {
                 field_type += field_type_name;
                 field_type += ")[]";
 
-                field_val = GenBBAccess() + ".createObjList<" + vectortypename +
-                            ", " + field_type_name + ">(" +
+                field_val = bb_table_getter + ".createObjList<" +
+                            vectortypename + ", " + field_type_name + ">(" +
                             field_binded_method + ", " +
                             NumToString(field.value.type.fixed_length) + ")";
 
@@ -1378,7 +1381,7 @@ class TsGenerator : public BaseGenerator {
 
               case BASE_TYPE_STRING: {
                 field_type += "string)[]";
-                field_val = GenBBAccess() + ".createScalarList<string>(" +
+                field_val = bb_table_getter + ".createScalarList<string>(" +
                             field_binded_method + ", this." +
                             namer_.Field(field, "Length") + "())";
                 field_offset_decl =
@@ -1412,7 +1415,7 @@ class TsGenerator : public BaseGenerator {
                   field_type += vectortypename;
                 }
                 field_type += ")[]";
-                field_val = GenBBAccess() + ".createScalarList<" +
+                field_val = bb_table_getter + ".createScalarList<" +
                             vectortypename + ">(" + field_binded_method + ", " +
                             NumToString(field.value.type.fixed_length) + ")";
 
@@ -1444,8 +1447,8 @@ class TsGenerator : public BaseGenerator {
                 field_type += field_type_name;
                 field_type += ")[]";
 
-                field_val = GenBBAccess() + ".createObjList<" + vectortypename +
-                            ", " + field_type_name + ">(" +
+                field_val = bb_table_getter + ".createObjList<" +
+                            vectortypename + ", " + field_type_name + ">(" +
                             field_binded_method + ", this." +
                             namer_.Method(field, "Length") + "())";
 
@@ -1467,7 +1470,7 @@ class TsGenerator : public BaseGenerator {
 
               case BASE_TYPE_STRING: {
                 field_type += "string)[]";
-                field_val = GenBBAccess() + ".createScalarList<string>(" +
+                field_val = bb_table_getter + ".createScalarList<string>(" +
                             field_binded_method + ", this." +
                             namer_.Field(field, "Length") + "())";
                 field_offset_decl =
@@ -1501,7 +1504,7 @@ class TsGenerator : public BaseGenerator {
                   field_type += vectortypename;
                 }
                 field_type += ")[]";
-                field_val = GenBBAccess() + ".createScalarList<" +
+                field_val = bb_table_getter + ".createScalarList<" +
                             vectortypename + ">(" + field_binded_method +
                             ", this." + namer_.Method(field, "Length") + "())";
 
@@ -1670,6 +1673,11 @@ class TsGenerator : public BaseGenerator {
     code += "  return this;\n";
     code += "}\n\n";
 
+    code +=
+        "provideFieldTable(fieldId:number): flatbuffers.Table {\n  return { "
+        "bb: this.bb!, "
+        "bb_pos: this.bb_pos };\n}\n\n";
+
     // Generate special accessors for the table that when used as the root of a
     // FlatBuffer
     GenerateRootAccessor(struct_def, code_ptr, code, object_name, false);
@@ -1691,14 +1699,19 @@ class TsGenerator : public BaseGenerator {
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;
       if (field.deprecated) continue;
+
+      std::string bb_table_getter =
+          "  const { bb, bb_pos } = this.provideFieldTable(" +
+          NumToString(field.value.offset) + ");\n";
+
       std::string offset_prefix = "";
 
       if (field.value.type.base_type == BASE_TYPE_ARRAY) {
         offset_prefix = "    return ";
       } else {
         offset_prefix = "  const offset = " + GenBBAccess() +
-                        ".__offset(this.bb_pos, " +
-                        NumToString(field.value.offset) + ");\n";
+                        ".__offset(bb_pos, " + NumToString(field.value.offset) +
+                        ");\n";
         offset_prefix += "  return offset ? ";
       }
 
@@ -1731,14 +1744,15 @@ class TsGenerator : public BaseGenerator {
                   " {\n";
         }
 
+        code += bb_table_getter;
+
         if (struct_def.fixed) {
-          code +=
-              "  return " +
-              GenGetter(field.value.type,
-                        "(this.bb_pos" + MaybeAdd(field.value.offset) + ")") +
-              ";\n";
+          code += "  return " +
+                  GenGetter(field.value.type,
+                            "(bb_pos" + MaybeAdd(field.value.offset) + ")") +
+                  ";\n";
         } else {
-          std::string index = "this.bb_pos + offset";
+          std::string index = "bb_pos + offset";
           if (is_string) {
             index += ", optionalEncoding";
           }
@@ -1761,18 +1775,19 @@ class TsGenerator : public BaseGenerator {
             GenDocComment(field.doc_comment, code_ptr);
             code += namer_.Method(field);
             code += "(obj?:" + type + "):" + type + "|null {\n";
+            code += bb_table_getter;
 
             if (struct_def.fixed) {
               code += "  return (obj || " + GenerateNewExpression(type);
-              code += ").__init(this.bb_pos";
+              code += ").__init(bb_pos";
               code +=
                   MaybeAdd(field.value.offset) + ", " + GenBBAccess() + ");\n";
             } else {
               code += offset_prefix + "(obj || " + GenerateNewExpression(type) +
                       ").__init(";
               code += field.value.type.struct_def->fixed
-                          ? "this.bb_pos + offset"
-                          : GenBBAccess() + ".__indirect(this.bb_pos + offset)";
+                          ? "bb_pos + offset"
+                          : GenBBAccess() + ".__indirect(bb_pos + offset)";
               code += ", " + GenBBAccess() + ") : null;\n";
             }
 
@@ -1784,7 +1799,7 @@ class TsGenerator : public BaseGenerator {
             auto vectortypename =
                 GenTypeName(imports, struct_def, vectortype, false);
             auto inline_size = InlineSize(vectortype);
-            auto index = "this.bb_pos + " + NumToString(field.value.offset) +
+            auto index = "bb_pos + " + NumToString(field.value.offset) +
                          " + index" + MaybeScale(inline_size);
             std::string ret_type;
             bool is_union = false;
@@ -1827,6 +1842,7 @@ class TsGenerator : public BaseGenerator {
               code += prefix;
             }
             code += "):" + vectortypename + "|null {\n";
+            code += bb_table_getter;
 
             if (vectortype.base_type == BASE_TYPE_STRUCT) {
               code += offset_prefix + "(obj || " +
@@ -1881,8 +1897,7 @@ class TsGenerator : public BaseGenerator {
                 GenTypeName(imports, struct_def, vectortype, false);
             auto type = GetUnderlyingVectorType(vectortype);
             auto inline_size = InlineSize(type);
-            auto index = GenBBAccess() +
-                         ".__vector(this.bb_pos + offset) + index" +
+            auto index = GenBBAccess() + ".__vector(bb_pos + offset) + index" +
                          MaybeScale(inline_size);
             std::string ret_type;
             bool is_union = false;
@@ -1925,6 +1940,7 @@ class TsGenerator : public BaseGenerator {
               code += prefix;
             }
             code += "):" + vectortypename + "|null {\n";
+            code += bb_table_getter;
 
             if (vectortype.base_type == BASE_TYPE_STRUCT) {
               code += offset_prefix + "(obj || " +
@@ -1972,8 +1988,9 @@ class TsGenerator : public BaseGenerator {
                     "|null "
                     "{\n";
 
+            code += bb_table_getter;
             code += offset_prefix +
-                    GenGetter(field.value.type, "(obj, this.bb_pos + offset)") +
+                    GenGetter(field.value.type, "(obj, bb_pos + offset)") +
                     " : null;\n";
             break;
           }
@@ -1991,23 +2008,22 @@ class TsGenerator : public BaseGenerator {
 
         code += namer_.LegacyTsMutateMethod(field) + "(value:" + type +
                 "):boolean {\n";
+        code += bb_table_getter;
 
         const std::string write_method =
             "." + namer_.Method("write", GenType(field.value.type));
 
         if (struct_def.fixed) {
-          code += "  " + GenBBAccess() + write_method + "(this.bb_pos + " +
+          code += "  " + GenBBAccess() + write_method + "(bb_pos + " +
                   NumToString(field.value.offset) + ", ";
         } else {
-          code += "  const offset = " + GenBBAccess() +
-                  ".__offset(this.bb_pos, " + NumToString(field.value.offset) +
-                  ");\n\n";
+          code += "  const offset = " + GenBBAccess() + ".__offset(bb_pos, " +
+                  NumToString(field.value.offset) + ");\n\n";
           code += "  if (offset === 0) {\n";
           code += "    return false;\n";
           code += "  }\n\n";
 
-          code +=
-              "  " + GenBBAccess() + write_method + "(this.bb_pos + offset, ";
+          code += "  " + GenBBAccess() + write_method + "(bb_pos + offset, ";
         }
 
         // special case for bools, which are treated as uint8
@@ -2025,10 +2041,9 @@ class TsGenerator : public BaseGenerator {
         // Emit a length helper
         GenDocComment(code_ptr);
         code += namer_.Method(field, "Length");
-        code += "():number {\n" + offset_prefix;
+        code += "():number {\n" + bb_table_getter + offset_prefix;
 
-        code +=
-            GenBBAccess() + ".__vector_len(this.bb_pos + offset) : 0;\n}\n\n";
+        code += GenBBAccess() + ".__vector_len(bb_pos + offset) : 0;\n}\n\n";
 
         // For scalar types, emit a typed array helper
         auto vectorType = field.value.type.VectorType();
@@ -2036,14 +2051,14 @@ class TsGenerator : public BaseGenerator {
           GenDocComment(code_ptr);
 
           code += namer_.Method(field, "Array");
-          code +=
-              "():" + GenType(vectorType) + "Array|null {\n" + offset_prefix;
+          code += "():" + GenType(vectorType) + "Array|null {\n" +
+                  bb_table_getter + offset_prefix;
 
           code += "new " + GenType(vectorType) + "Array(" + GenBBAccess() +
                   ".bytes().buffer, " + GenBBAccess() +
                   ".bytes().byteOffset + " + GenBBAccess() +
-                  ".__vector(this.bb_pos + offset), " + GenBBAccess() +
-                  ".__vector_len(this.bb_pos + offset)) : null;\n}\n\n";
+                  ".__vector(bb_pos + offset), " + GenBBAccess() +
+                  ".__vector_len(bb_pos + offset)) : null;\n}\n\n";
         }
       }
     }
