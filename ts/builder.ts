@@ -552,6 +552,7 @@ export class Builder {
    * Encode the string `s` in the buffer using UTF-8. If the string passed has
    * already been seen, we return the offset of the already written string
    *
+   * @deprecated Use "cache" method override to control caching over all types
    * @param s The string to encode
    * @return The offset in the buffer where the encoded string starts
    */
@@ -584,6 +585,9 @@ export class Builder {
       return 0;
     }
 
+    const [cached, setCached] = this.cache(s);
+    if (cached) return cached;
+
     let utf8: string | Uint8Array | number[];
     if (s instanceof Uint8Array) {
       utf8 = s;
@@ -595,7 +599,7 @@ export class Builder {
     this.startVector(1, utf8.length, 1);
     this.bb.setPosition((this.space -= utf8.length));
     this.bb.bytes().set(utf8, this.space);
-    return this.endVector();
+    return setCached(this.endVector());
   }
 
   /**
@@ -609,10 +613,13 @@ export class Builder {
       return 0;
     }
 
+    const [cached, setCached] = this.cache(v);
+    if (cached) return cached;
+
     this.startVector(1, v.length, 1);
     this.bb.setPosition((this.space -= v.length));
     this.bb.bytes().set(v, this.space);
-    return this.endVector();
+    return setCached(this.endVector());
   }
 
   /**
@@ -628,7 +635,9 @@ export class Builder {
     if (typeof obj === 'string') {
       return this.createString(obj);
     } else {
-      return obj.pack(this);
+      const [cached, setCached] = this.cache(obj);
+      if (cached) return cached;
+      return setCached(obj.pack(this));
     }
   }
 
@@ -645,6 +654,24 @@ export class Builder {
 
       if (val !== null) {
         ret.push(this.createObjectOffset(val));
+      } else {
+        throw new TypeError(
+          'FlatBuffers: Argument for createObjectOffsetList cannot contain null.',
+        );
+      }
+    }
+
+    return ret;
+  }
+
+  createStringOffsetList(list: (string | Uint8Array)[]): Offset[] {
+    const ret: number[] = [];
+
+    for (let i = 0; i < list.length; ++i) {
+      const val = list[i];
+
+      if (val !== null) {
+        ret.push(this.createString(val));
       } else {
         throw new TypeError(
           'FlatBuffers: Argument for createObjectOffsetList cannot contain null.',

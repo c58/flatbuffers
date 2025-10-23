@@ -1248,17 +1248,13 @@ class TsGenerator : public BaseGenerator {
     std::string pack_func_prototype =
         "\npack(builder:flatbuffers.Builder): flatbuffers.Offset {\n";
 
-    std::string pack_func_cache_call =
-        "  const [$cached, $setCache] = builder.cache(this);\n  if ($cached) "
-        "return $cached;\n";
-
     std::string pack_func_offset_decl;
     std::string pack_func_create_call;
 
     const auto struct_name = AddImport(imports, struct_def, struct_def).name;
 
     if (has_create) {
-      pack_func_create_call = "  return $setCache(" + struct_name + ".create" +
+      pack_func_create_call = "  return " + struct_name + ".create" +
                               GetPrefixedName(struct_def) + "(builder" +
                               (struct_def.fields.vec.empty() ? "" : ",\n    ");
     } else {
@@ -1286,7 +1282,8 @@ class TsGenerator : public BaseGenerator {
           "this." + field_method + ".bind(this)";
 
       const std::string bb_table_getter =
-          "this.provideFieldTable(" + NumToString(field.value.offset) + ").bb";
+          "this.provideFieldTable(" +
+          NumToString(it - struct_def.fields.vec.begin()) + ").bb";
 
       std::string field_val;
       std::string field_type;
@@ -1306,6 +1303,7 @@ class TsGenerator : public BaseGenerator {
 
         field_type += GenTypeName(imports, field, field.value.type, false,
                                   has_null_default);
+
         field_val = "this." + namer_.Method(field) + "()";
 
         if (field.value.type.base_type != BASE_TYPE_STRING) {
@@ -1348,15 +1346,12 @@ class TsGenerator : public BaseGenerator {
                 GenTypeName(imports, struct_def, vectortype, false);
             is_vector = true;
 
-            field_type = "(";
-
             switch (vectortype.base_type) {
               case BASE_TYPE_STRUCT: {
                 const auto& sd = *field.value.type.struct_def;
                 const auto field_type_name =
                     GetTypeName(sd, /*object_api=*/true);
-                field_type += field_type_name;
-                field_type += ")[]";
+                field_type += "(" + field_type_name + ")[]";
 
                 field_val = bb_table_getter + ".createObjList<" +
                             vectortypename + ", " + field_type_name + ">(" +
@@ -1380,19 +1375,21 @@ class TsGenerator : public BaseGenerator {
               }
 
               case BASE_TYPE_STRING: {
-                field_type += "string)[]";
-                field_val = bb_table_getter + ".createScalarList<string>(" +
+                field_type += "(string|Uint8Array)[]";
+                field_val = bb_table_getter +
+                            ".createScalarList<string|Uint8Array>(" +
                             field_binded_method + ", this." +
                             namer_.Field(field, "Length") + "())";
                 field_offset_decl =
                     AddImport(imports, struct_def, struct_def).name + "." +
                     namer_.Method("create", field, "Vector") +
-                    "(builder, builder.createObjectOffsetList(" + "this." +
+                    "(builder, builder.createStringOffsetList(" + "this." +
                     namer_.Field(field) + "))";
                 break;
               }
 
               case BASE_TYPE_UNION: {
+                field_type += "(";
                 field_type += GenObjApiUnionTypeTS(
                     imports, struct_def, parser.opts, *(vectortype.enum_def));
                 field_type += ")[]";
@@ -1407,17 +1404,23 @@ class TsGenerator : public BaseGenerator {
 
                 break;
               }
+
               default: {
                 if (vectortype.enum_def) {
+                  field_type += "(";
                   field_type += GenTypeName(imports, struct_def, vectortype,
                                             false, HasNullDefault(field));
+                  field_type += ")[]";
+                  field_val = bb_table_getter + ".createScalarList<" +
+                              vectortypename + ">(" + field_binded_method +
+                              ", " +
+                              NumToString(field.value.type.fixed_length) + ")";
                 } else {
-                  field_type += vectortypename;
+                  field_type += "(" + vectortypename + ")[]|";
+                  field_type += GenType(vectortype) + "Array";
+                  field_val =
+                      "this." + namer_.Method(field, "Array") + "() ?? []";
                 }
-                field_type += ")[]";
-                field_val = bb_table_getter + ".createScalarList<" +
-                            vectortypename + ">(" + field_binded_method + ", " +
-                            NumToString(field.value.type.fixed_length) + ")";
 
                 field_offset_decl =
                     AddImport(imports, struct_def, struct_def).name + "." +
@@ -1437,15 +1440,12 @@ class TsGenerator : public BaseGenerator {
                 GenTypeName(imports, struct_def, vectortype, false);
             is_vector = true;
 
-            field_type = "(";
-
             switch (vectortype.base_type) {
               case BASE_TYPE_STRUCT: {
                 const auto& sd = *field.value.type.struct_def;
                 const auto field_type_name =
                     GetTypeName(sd, /*object_api=*/true);
-                field_type += field_type_name;
-                field_type += ")[]";
+                field_type += "(" + field_type_name + ")[]";
 
                 field_val = bb_table_getter + ".createObjList<" +
                             vectortypename + ", " + field_type_name + ">(" +
@@ -1469,19 +1469,21 @@ class TsGenerator : public BaseGenerator {
               }
 
               case BASE_TYPE_STRING: {
-                field_type += "string)[]";
-                field_val = bb_table_getter + ".createScalarList<string>(" +
+                field_type += "(string|Uint8Array)[]";
+                field_val = bb_table_getter +
+                            ".createScalarList<string|Uint8Array>(" +
                             field_binded_method + ", this." +
                             namer_.Field(field, "Length") + "())";
                 field_offset_decl =
                     AddImport(imports, struct_def, struct_def).name + "." +
                     namer_.Method("create", field, "Vector") +
-                    "(builder, builder.createObjectOffsetList(" + "this." +
+                    "(builder, builder.createStringOffsetList(" + "this." +
                     namer_.Field(field) + "))";
                 break;
               }
 
               case BASE_TYPE_UNION: {
+                field_type += "(";
                 field_type += GenObjApiUnionTypeTS(
                     imports, struct_def, parser.opts, *(vectortype.enum_def));
                 field_type += ")[]";
@@ -1498,15 +1500,20 @@ class TsGenerator : public BaseGenerator {
               }
               default: {
                 if (vectortype.enum_def) {
+                  field_type += "(";
                   field_type += GenTypeName(imports, struct_def, vectortype,
                                             false, HasNullDefault(field));
+                  field_type += ")[]";
+                  field_val = bb_table_getter + ".createScalarList<" +
+                              vectortypename + ">(" + field_binded_method +
+                              ", this." + namer_.Method(field, "Length") +
+                              "())";
                 } else {
-                  field_type += vectortypename;
+                  field_type += "(" + vectortypename + ")[]|";
+                  field_type += GenType(vectortype) + "Array";
+                  field_val =
+                      "this." + namer_.Method(field, "Array") + "() ?? []";
                 }
-                field_type += ")[]";
-                field_val = bb_table_getter + ".createScalarList<" +
-                            vectortypename + ">(" + field_binded_method +
-                            ", this." + namer_.Method(field, "Length") + "())";
 
                 field_offset_decl =
                     AddImport(imports, struct_def, struct_def).name + "." +
@@ -1601,18 +1608,18 @@ class TsGenerator : public BaseGenerator {
 
     constructor_func += ") {}\n\n";
     if (has_create) {
-      pack_func_create_call += "  ));";
+      pack_func_create_call += "  );";
     } else {
-      pack_func_create_call += "  return $setCache(" + struct_name + ".end" +
-                               GetPrefixedName(struct_def) + "(builder));";
+      pack_func_create_call += "  return " + struct_name + ".end" +
+                               GetPrefixedName(struct_def) + "(builder);";
     }
     obj_api_class = "\n";
     obj_api_class += "export class ";
     obj_api_class += GetTypeName(struct_def, /*object_api=*/true);
     obj_api_class += " implements flatbuffers.IGeneratedObject {\n";
     obj_api_class += constructor_func;
-    obj_api_class += pack_func_prototype + pack_func_cache_call +
-                     pack_func_offset_decl + pack_func_create_call + "\n}";
+    obj_api_class += pack_func_prototype + pack_func_offset_decl +
+                     pack_func_create_call + "\n}";
 
     obj_api_class += "\n}\n";
 
@@ -1702,7 +1709,7 @@ class TsGenerator : public BaseGenerator {
 
       std::string bb_table_getter =
           "  const { bb, bb_pos } = this.provideFieldTable(" +
-          NumToString(field.value.offset) + ");\n";
+          NumToString(it - struct_def.fields.vec.begin()) + ");\n";
 
       std::string offset_prefix = "";
 
