@@ -1251,6 +1251,8 @@ class TsGenerator : public BaseGenerator {
     std::string pack_func_offset_decl;
     std::string pack_func_create_call;
 
+    std::string field_id_constants;
+
     const auto struct_name = AddImport(imports, struct_def, struct_def).name;
 
     if (has_create) {
@@ -1556,8 +1558,8 @@ class TsGenerator : public BaseGenerator {
       }
 
       unpack_func += "    this.unpackField(" + field_index + ")";
-      unpack_to_func +=
-          "  _o." + field_field + " = this.unpackField(" + field_index + ");";
+      unpack_to_func += "  _o." + field_field + " = this.unpackField(" +
+                        field_index + ") ?? " + field_default_val + ";";
 
       constructor_func += "    public " + field_field + ": " + field_type +
                           " = " + field_default_val + "";
@@ -1567,6 +1569,10 @@ class TsGenerator : public BaseGenerator {
 
       unpack_field_func +=
           "  case " + field_index + ":\n      return " + field_val + ";\n  ";
+
+      field_id_constants += "export const " +
+                            namer_.Format(field.name, Case::kScreamingSnake) +
+                            "_FIELD_ID = " + field_index + " as const;\n";
 
       if (!struct_def.fixed) {
         if (!field_offset_decl.empty()) {
@@ -1621,7 +1627,8 @@ class TsGenerator : public BaseGenerator {
     obj_api_class += pack_func_prototype + pack_func_offset_decl +
                      pack_func_create_call + "\n}";
 
-    obj_api_class += "\n}\n";
+    obj_api_class += "\n}\n\n";
+    obj_api_class += field_id_constants;
 
     unpack_func += ");\n}";
     unpack_field_func += "  default:\n      return undefined;\n  }\n}";
