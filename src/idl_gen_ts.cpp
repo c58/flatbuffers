@@ -1228,6 +1228,13 @@ class TsGenerator : public BaseGenerator {
     const auto class_name = GetTypeName(struct_def, /*object_api=*/true);
     const auto object_name = GetTypeName(struct_def);
 
+    const std::string has_field_func =
+        "hasFieldInTable(fieldId: number): boolean {\n  const table = "
+        "this.provideFieldTable(fieldId);\n  if (table.bb && "
+        "table.bb.capacity() > 0) {\n    const offset = "
+        "table.bb.__offset(table.bb_pos, fieldId * 2 + 4);\n    if (offset !== "
+        "0) {\n      return true;\n    }\n  }\n  return false;\n}";
+
     std::string unpack_func = "\nunpack(): " + class_name +
                               " {\n  return new " + class_name + "(" +
                               (struct_def.fields.vec.empty() ? "" : "\n");
@@ -1314,7 +1321,7 @@ class TsGenerator : public BaseGenerator {
           field_offset_val = "this." + namer_.Field(field);
         } else {
           field_offset_decl = GenNullCheckConditional(
-              "this." + namer_.Field(field),
+              "this." + field_field,
               "builder.createString(this." + field_field + "!)", "0");
         }
       }
@@ -1552,19 +1559,38 @@ class TsGenerator : public BaseGenerator {
       }
 
       if (!field_offset_decl.empty()) {
-        field_offset_decl =
-            "  const " + field_field + " = " + field_offset_decl + ";";
+        field_offset_decl = "  const " + field_field + " = (this." +
+                            field_field + " !== undefined) ? (" +
+                            field_offset_decl + ") : undefined;";
       }
+
+      const std::string field_to_check_null =
+          field_offset_val.empty() ? field_field : "this." + field_field;
+
       if (field_offset_val.empty()) {
         field_offset_val = field_field;
       }
 
-      unpack_func += "    this.unpackField(" + field_id_var_name + ")";
-      unpack_to_func += "  _o." + field_field + " = this.unpackField(" +
-                        field_id_var_name + ") ?? " + field_default_val + ";";
+      if (!struct_def.fixed) {
+        unpack_func += "    this.hasFieldInTable(" + field_id_var_name +
+                       ") ? this.unpackField(" + field_id_var_name +
+                       ") : undefined";
+        unpack_to_func += "  _o." + field_field + " = this.hasFieldInTable(" +
+                          field_id_var_name + ") ? (this.unpackField(" +
+                          field_id_var_name + ") ?? " + field_default_val +
+                          ") : undefined;";
+      } else {
+        unpack_func += "    this.unpackField(" + field_id_var_name + ")";
+        unpack_to_func += "  _o." + field_field + " = this.unpackField(" +
+                          field_id_var_name + ") ?? " + field_default_val + ";";
+      }
 
-      constructor_func += "    public " + field_field + ": " + field_type +
-                          " = " + field_default_val + "";
+      constructor_func += "    public " + field_field;
+      if (!struct_def.fixed) {
+        constructor_func += "?: " + field_type + "|undefined";
+      } else {
+        constructor_func += ": " + field_type;
+      }
 
       unpack_field_overrides += "  unpackField(prop: typeof " +
                                 field_id_var_name + "): " + field_type + ";\n";
@@ -1584,9 +1610,13 @@ class TsGenerator : public BaseGenerator {
         if (has_create) {
           pack_func_create_call += field_offset_val;
         } else {
+          pack_func_create_call +=
+              "  if (" + field_to_check_null + " !== undefined";
           if (field.IsScalarOptional()) {
             pack_func_create_call +=
-                "  if (" + field_offset_val + " !== null)\n  ";
+                " && " + field_to_check_null + " !== null)\n  ";
+          } else {
+            pack_func_create_call += ")\n  ";
           }
           pack_func_create_call += "  " + struct_name + "." +
                                    namer_.Method("add", field) + "(builder, " +
@@ -1636,8 +1666,12 @@ class TsGenerator : public BaseGenerator {
     unpack_field_func += "  default:\n      return undefined;\n  }\n}";
     unpack_to_func += "}\n";
 
-    obj_api_unpack_func = unpack_field_overrides + unpack_field_func + "\n" +
-                          unpack_func + "\n" + unpack_to_func;
+    if (!struct_def.fixed) {
+      obj_api_unpack_func += has_field_func + "\n";
+    }
+
+    obj_api_unpack_func += unpack_field_overrides + unpack_field_func + "\n" +
+                           unpack_func + "\n" + unpack_to_func;
   }
 
   static bool CanCreateFactoryMethod(const StructDef& struct_def) {
