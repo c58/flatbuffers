@@ -1283,9 +1283,11 @@ class TsGenerator : public BaseGenerator {
       const std::string field_binded_method =
           "this." + field_method + ".bind(this)";
 
+      const std::string field_id_var_name =
+          namer_.Format(field.name, Case::kScreamingSnake) + "_FIELD_ID";
+
       const std::string bb_table_getter =
-          "this.provideFieldTable(" +
-          NumToString(it - struct_def.fields.vec.begin()) + ").bb";
+          "this.provideFieldTable(" + field_id_var_name + ").bb";
 
       std::string field_val;
       std::string field_type;
@@ -1557,18 +1559,18 @@ class TsGenerator : public BaseGenerator {
         field_offset_val = field_field;
       }
 
-      unpack_func += "    this.unpackField(" + field_index + ")";
+      unpack_func += "    this.unpackField(" + field_id_var_name + ")";
       unpack_to_func += "  _o." + field_field + " = this.unpackField(" +
-                        field_index + ") ?? " + field_default_val + ";";
+                        field_id_var_name + ") ?? " + field_default_val + ";";
 
       constructor_func += "    public " + field_field + ": " + field_type +
                           " = " + field_default_val + "";
 
-      unpack_field_overrides +=
-          "  unpackField(prop: " + field_index + "): " + field_type + ";\n";
+      unpack_field_overrides += "  unpackField(prop: typeof " +
+                                field_id_var_name + "): " + field_type + ";\n";
 
-      unpack_field_func +=
-          "  case " + field_index + ":\n      return " + field_val + ";\n  ";
+      unpack_field_func += "  case " + field_id_var_name + ":\n      return " +
+                           field_val + ";\n  ";
 
       field_id_constants += "export const " +
                             namer_.Format(field.name, Case::kScreamingSnake) +
@@ -1714,9 +1716,12 @@ class TsGenerator : public BaseGenerator {
       auto& field = **it;
       if (field.deprecated) continue;
 
+      const std::string field_id_var_name =
+          namer_.Format(field.name, Case::kScreamingSnake) + "_FIELD_ID";
+
       std::string bb_table_getter =
           "  const { bb, bb_pos } = this.provideFieldTable(" +
-          NumToString(it - struct_def.fields.vec.begin()) + ");\n";
+          field_id_var_name + ");\n";
 
       std::string offset_prefix = "";
 
