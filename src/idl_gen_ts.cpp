@@ -1648,7 +1648,7 @@ class TsGenerator : public BaseGenerator {
     if (has_create) {
       pack_func_create_call += ");";
     } else {
-      pack_func_create_call += "  return " + struct_name + ".end" +
+      pack_func_create_call += "return " + struct_name + ".end" +
                                GetPrefixedName(struct_def) + "(builder);";
     }
     obj_api_class = "\n";
@@ -1667,7 +1667,7 @@ class TsGenerator : public BaseGenerator {
     unpack_to_func += "}\n";
 
     if (!struct_def.fixed) {
-      obj_api_unpack_func += has_field_func + "\n";
+      obj_api_unpack_func += "\n" + has_field_func + "\n\n";
     }
 
     obj_api_unpack_func += unpack_field_overrides + unpack_field_func + "\n" +
@@ -2283,7 +2283,7 @@ class TsGenerator : public BaseGenerator {
           const auto& field = **it;
           if (field.deprecated) continue;
           code += ", " + GetArgName(field) + ":" +
-                  GetArgType(imports, struct_def, field, true);
+                  GetArgType(imports, struct_def, field, true) + "|undefined";
         }
 
         code += "):flatbuffers.Offset {\n";
@@ -2298,8 +2298,11 @@ class TsGenerator : public BaseGenerator {
 
           const auto arg_name = GetArgName(field);
 
+          code += "  if (" + arg_name + " !== undefined";
           if (field.IsScalarOptional()) {
-            code += "  if (" + arg_name + " !== null)\n  ";
+            code += " && " + arg_name + " !== null)\n  ";
+          } else {
+            code += ")\n  ";
           }
 
           code += "  " + methodPrefix + "." + namer_.Method("add", field) + "(";
