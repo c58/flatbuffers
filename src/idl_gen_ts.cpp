@@ -2282,8 +2282,9 @@ class TsGenerator : public BaseGenerator {
              it != struct_def.fields.vec.end(); ++it) {
           const auto& field = **it;
           if (field.deprecated) continue;
-          code += ", " + GetArgName(field) + ":" +
-                  GetArgType(imports, struct_def, field, true) + "|undefined";
+          code += ", " + GetArgName(field) +
+                  "?:" + GetArgType(imports, struct_def, field, true) +
+                  "|undefined";
         }
 
         code += "):flatbuffers.Offset {\n";
