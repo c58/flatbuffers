@@ -282,7 +282,10 @@ export class Builder {
   }
 
   addFieldOffset(voffset: number, value: Offset, defaultValue: Offset): void {
-    if (this.force_defaults || value != defaultValue) {
+    if (
+      (this.force_defaults && defaultValue !== 0) ||
+      value != defaultValue
+    ) {
       this.addOffset(value);
       this.slot(voffset);
     }
