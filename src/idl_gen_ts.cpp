@@ -1243,10 +1243,10 @@ class TsGenerator : public BaseGenerator {
 
     std::string unpack_field_overrides = "";
     std::string unpack_field_func =
-        "\nunpackField(prop: number): any {\n  "
+        "unpackField(prop: number): any {\n  "
         "switch (prop) {\n  ";
 
-    std::string constructor_func = "  constructor(";
+    std::string constructor_func = "constructor(";
     constructor_func += (struct_def.fields.vec.empty() ? "" : "\n");
 
     const auto has_create =
@@ -1585,14 +1585,14 @@ class TsGenerator : public BaseGenerator {
                           field_id_var_name + ") ?? " + field_default_val + ";";
       }
 
-      constructor_func += "    public " + field_field;
+      constructor_func += "  public " + field_field;
       if (!struct_def.fixed) {
         constructor_func += "?: " + field_type + "|undefined";
       } else {
         constructor_func += ": " + field_type;
       }
 
-      unpack_field_overrides += "  unpackField(prop: typeof " +
+      unpack_field_overrides += "unpackField(prop: typeof " +
                                 field_id_var_name + "): " + field_type + ";\n";
 
       unpack_field_func += "  case " + field_id_var_name + ":\n      return " +
@@ -1638,15 +1638,15 @@ class TsGenerator : public BaseGenerator {
           pack_func_create_call += "\n  ";
         }
 
-        constructor_func += "\n  ";
+        constructor_func += "\n";
         unpack_to_func += "\n";
         unpack_func += "\n  ";
       }
     }
 
-    constructor_func += ") {}\n\n";
+    constructor_func += ") {}\n";
     if (has_create) {
-      pack_func_create_call += "  );";
+      pack_func_create_call += ");";
     } else {
       pack_func_create_call += "  return " + struct_name + ".end" +
                                GetPrefixedName(struct_def) + "(builder);";
@@ -1717,7 +1717,7 @@ class TsGenerator : public BaseGenerator {
     // Generate the __init method that sets the field in a pre-existing
     // accessor object. This is to allow object reuse.
     code +=
-        "  __init(i:number, bb:flatbuffers.ByteBuffer):" + object_name + " {\n";
+        "__init(i:number, bb:flatbuffers.ByteBuffer):" + object_name + " {\n";
     code += "  this.bb_pos = i;\n";
     code += "  this.bb = bb;\n";
     code += "  return this;\n";
