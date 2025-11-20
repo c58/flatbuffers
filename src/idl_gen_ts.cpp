@@ -1631,7 +1631,7 @@ class TsGenerator : public BaseGenerator {
 
       if (std::next(it) != struct_def.fields.vec.end()) {
         if (!struct_def.fixed && has_create) {
-          pack_func_create_call += ",\n    ";
+          pack_func_create_call += ",\n      ";
         }
 
         constructor_func += ",\n";
