@@ -2060,6 +2060,28 @@ class TsGenerator : public BaseGenerator {
       }
       code += "  }\n\n";
 
+      // generate object accessors if is nested_flatbuffer
+      if (field.nested_flatbuffer) {
+        const auto nested_type =
+            AddImport(imports, struct_def, *field.nested_flatbuffer).name;
+        const auto nested_method_name =
+            namer_.Method(field) + "As" + field.nested_flatbuffer->name;
+
+        // Generate method with optional obj parameter
+        GenDocComment(code_ptr, "  ");
+        code += "  " + nested_method_name;
+        code += "(obj?:" + nested_type + "):" + nested_type + "|null {\n";
+        code += bb_table_getter;
+        code += "    const offset = " + GenBBAccess() + ".__offset(bb_pos, " +
+                NumToString(field.value.offset) + ");\n";
+        code += "    return offset ? (obj || " + GenerateNewExpression(nested_type) +
+                ").__init(";
+        code += GenBBAccess() + ".__indirect(" + GenBBAccess() +
+                ".__vector(bb_pos + offset)), ";
+        code += GenBBAccess() + ") : null;\n";
+        code += "  }\n\n";
+      }
+
       // Adds the mutable scalar value to the output
       if (IsScalar(field.value.type.base_type) && parser.opts.mutable_buffer &&
           !IsUnion(field.value.type)) {
