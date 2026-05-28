@@ -535,7 +535,12 @@ class TsGenerator : public BaseGenerator {
       }
 
       case BASE_TYPE_ARRAY:
+        return "[]";
       case BASE_TYPE_VECTOR:
+        if (value.type.element == BASE_TYPE_UCHAR &&
+            value.type.enum_def == nullptr) {
+          return "new Uint8Array()";
+        }
         return "[]";
 
       case BASE_TYPE_LONG:
@@ -1524,6 +1529,10 @@ class TsGenerator : public BaseGenerator {
                               vectortypename + ">(" + field_binded_method +
                               ", this." + namer_.Method(field, "Length") +
                               "())";
+                } else if (vectortype.base_type == BASE_TYPE_UCHAR) {
+                  field_type += GenType(vectortype) + "Array";
+                  field_val =
+                      "this." + namer_.Method(field, "Array") + "() ?? new Uint8Array()";
                 } else {
                   field_type += "(" + vectortypename + ")[]|";
                   field_type += GenType(vectortype) + "Array";
