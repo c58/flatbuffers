@@ -17,19 +17,24 @@
 import Foundation
 
 #if canImport(Common)
-  import Common
+import Common
 #endif
 
 /// Enum is a protocol that all flatbuffers enums should conform to
 /// Since it allows us to get the actual `ByteSize` and `Value` from
 /// a swift enum.
-public protocol Enum {
+public protocol Enum: Sendable {
   /// associatedtype that the type of the enum should conform to
   associatedtype T: Scalar & Verifiable
   /// Size of the current associatedtype in the enum
   static var byteSize: Int { get }
+  /// Provides a static min value in case we fail to decode
+  /// in vectors
+  static var min: Self { get }
   /// The current value the enum hosts
   var value: T { get }
+
+  init?(rawValue: T)
 }
 
 extension Enum where Self: Verifiable {
@@ -44,8 +49,8 @@ extension Enum where Self: Verifiable {
   public static func verify<T>(
     _ verifier: inout Verifier,
     at position: Int,
-    of type: T.Type
-  ) throws where T: Verifiable {
+    of type: T.Type) throws where T: Verifiable
+  {
     try verifier.inBuffer(position: position, of: type.self)
   }
 

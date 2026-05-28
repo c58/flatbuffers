@@ -9,12 +9,12 @@
     <Compile Remove="Properties\AssemblyInfo.cs" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(UnsafeByteBuffer)' == 'true'">
+  <PropertyGroup Condition="'$(UNSAFE_BYTEBUFFER)' == 'true'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants>$(DefineConstants);UNSAFE_BYTEBUFFER</DefineConstants>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(EnableSpanT)' == 'true'">
+  <PropertyGroup Condition="'$(ENABLE_SPAN_T)' == 'true'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants>$(DefineConstants);ENABLE_SPAN_T</DefineConstants>
   </PropertyGroup>
@@ -105,6 +105,9 @@
     </Compile>
     <Compile Include="..\MyGame\Example\NestedStruct.cs">
       <Link>MyGame\Example\NestedStruct.cs</Link>
+    </Compile>
+    <Compile Include="..\MyGame\Example\LargeArrayStruct.cs">
+      <Link>MyGame\Example\LargeArrayStruct.cs</Link>
     </Compile>
     <Compile Include="..\MyGame\Example\LongEnum.cs">
       <Link>MyGame\Example\LongEnum.cs</Link>

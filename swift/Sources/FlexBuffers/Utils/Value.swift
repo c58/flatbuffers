@@ -17,13 +17,13 @@
 import Foundation
 
 #if canImport(Common)
-  import Common
+import Common
 #endif
 
-public struct Value: Equatable {
+public struct Value: Equatable, Sendable {
 
   @usableFromInline
-  enum Union: Equatable {
+  enum Union: Equatable, Sendable {
     case i(Int64)
     case u(UInt64)
     case f(Double)

@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-import XCTest
+import Testing
 
 @testable import FlatBuffers
 
-final class FlatBuffersDoubleTests: XCTestCase {
+struct FlatBuffersDoubleTests {
 
   let country = "Norway"
 
+  @Test
   func testCreateFinish() {
     var b = FlatBufferBuilder(initialSize: 16)
     let countryOff = CountryDouble.createCountry(
@@ -38,9 +39,10 @@ final class FlatBuffersDoubleTests: XCTestCase {
       97, 121, 0, 0,
     ]
     // swiftformat:enable all
-    XCTAssertEqual(b.sizedByteArray, v)
+    #expect(b.sizedByteArray == v)
   }
 
+  @Test
   func testCreateFinishWithPrefix() {
     var b = FlatBufferBuilder(initialSize: 16)
     let countryOff = CountryDouble.createCountry(
@@ -57,7 +59,7 @@ final class FlatBuffersDoubleTests: XCTestCase {
       0, 6, 0, 0, 0, 78, 111, 114, 119, 97, 121, 0, 0,
     ]
     // swiftformat:enable all
-    XCTAssertEqual(b.sizedByteArray, v)
+    #expect(b.sizedByteArray == v)
   }
 }
 
@@ -78,8 +80,8 @@ class CountryDouble {
     builder: inout FlatBufferBuilder,
     name: String,
     log: Double,
-    lan: Double
-  ) -> Offset {
+    lan: Double) -> Offset
+  {
     createCountry(
       builder: &builder,
       offset: builder.create(string: name),
@@ -91,8 +93,8 @@ class CountryDouble {
     builder: inout FlatBufferBuilder,
     offset: Offset,
     log: Double,
-    lan: Double
-  ) -> Offset {
+    lan: Double) -> Offset
+  {
     let _start = builder.startTable(with: 3)
     CountryDouble.add(builder: &builder, lng: log)
     CountryDouble.add(builder: &builder, lan: lan)
@@ -102,8 +104,8 @@ class CountryDouble {
 
   static func end(
     builder: inout FlatBufferBuilder,
-    startOffset: UOffset
-  ) -> Offset {
+    startOffset: UOffset) -> Offset
+  {
     Offset(offset: builder.endTable(at: startOffset))
   }
 

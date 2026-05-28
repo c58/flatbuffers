@@ -218,7 +218,7 @@ export class Builder {
   addFieldInt8(
     voffset: number,
     value: number,
-    defaultValue: number | null,
+    defaultValue: number | null | undefined,
   ): void {
     if (this.force_defaults || value != defaultValue) {
       this.addInt8(value);
@@ -229,7 +229,7 @@ export class Builder {
   addFieldInt16(
     voffset: number,
     value: number,
-    defaultValue: number | null,
+    defaultValue: number | null | undefined,
   ): void {
     if (this.force_defaults || value != defaultValue) {
       this.addInt16(value);
@@ -240,7 +240,7 @@ export class Builder {
   addFieldInt32(
     voffset: number,
     value: number,
-    defaultValue: number | null,
+    defaultValue: number | null | undefined,
   ): void {
     if (this.force_defaults || value != defaultValue) {
       this.addInt32(value);
@@ -251,7 +251,7 @@ export class Builder {
   addFieldInt64(
     voffset: number,
     value: bigint,
-    defaultValue: bigint | null,
+    defaultValue: bigint | null | undefined,
   ): void {
     if (this.force_defaults || value !== defaultValue) {
       this.addInt64(value);
@@ -262,7 +262,7 @@ export class Builder {
   addFieldFloat32(
     voffset: number,
     value: number,
-    defaultValue: number | null,
+    defaultValue: number | null | undefined,
   ): void {
     if (this.force_defaults || value != defaultValue) {
       this.addFloat32(value);
@@ -273,7 +273,7 @@ export class Builder {
   addFieldFloat64(
     voffset: number,
     value: number,
-    defaultValue: number | null,
+    defaultValue: number | null | undefined,
   ): void {
     if (this.force_defaults || value != defaultValue) {
       this.addFloat64(value);
@@ -627,8 +627,8 @@ export class Builder {
    *
    * @returns offset of obj
    */
-  createObjectOffset(obj: string | IGeneratedObject | null): Offset {
-    if (obj === null) {
+  createObjectOffset(obj: string | IGeneratedObject | null | undefined): Offset {
+    if (obj === null || obj === undefined) {
       return 0;
     }
 
@@ -644,7 +644,7 @@ export class Builder {
   /**
    * A helper function to pack a list of object
    *
-   * @returns list of offsets of each non null object
+   * @returns list of offsets of each non null/undefined object
    */
   createObjectOffsetList(list: (string | IGeneratedObject)[]): Offset[] {
     const ret: number[] = [];
@@ -652,11 +652,11 @@ export class Builder {
     for (let i = 0; i < list.length; ++i) {
       const val = list[i];
 
-      if (val !== null) {
+      if (val !== null && val !== undefined) {
         ret.push(this.createObjectOffset(val));
       } else {
         throw new TypeError(
-          'FlatBuffers: Argument for createObjectOffsetList cannot contain null.',
+          'FlatBuffers: Argument for createObjectOffsetList cannot contain null or undefined.',
         );
       }
     }
